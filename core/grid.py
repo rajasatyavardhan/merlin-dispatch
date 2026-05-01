@@ -5,12 +5,17 @@
 import numpy as np
 import random
 
-# ── Weather States ────────────────────────────────────────────────
-WEATHER_CLEAR   = 0
-WEATHER_CLOUDY  = 1
-WEATHER_STORM   = 2
-WEATHER_BLIZZARD = 3
 
+# ── Weather States ────────────────────────────────────────────────
+# Represents environmental conditions in each cell.
+# These directly affect whether helicopter dispatch is possible.
+
+WEATHER_CLEAR   = 0   # Ideal flying conditions
+WEATHER_CLOUDY  = 1   # Acceptable but with caution
+WEATHER_STORM   = 2   # Unsafe — no helicopter allowed
+WEATHER_BLIZZARD = 3  # Extremely unsafe — no helicopter
+
+# Human-readable names for debugging / logging
 WEATHER_NAMES = {
     WEATHER_CLEAR:    "Clear",
     WEATHER_CLOUDY:   "Cloudy",
@@ -18,11 +23,15 @@ WEATHER_NAMES = {
     WEATHER_BLIZZARD: "Blizzard"
 }
 
+
 # ── Terrain Types ────────────────────────────────────────────────
-TERRAIN_FLAT    = 0
-TERRAIN_HILLY   = 1
-TERRAIN_FOREST  = 2
-TERRAIN_WATER   = 3
+# Defines physical geography of each cell.
+# Affects landing feasibility and routing decisions.
+
+TERRAIN_FLAT    = 0   # Easy landing and road access
+TERRAIN_HILLY   = 1   # Moderate difficulty
+TERRAIN_FOREST  = 2   # Limited landing zones
+TERRAIN_WATER   = 3   # No road access — helicopter only
 
 TERRAIN_NAMES = {
     TERRAIN_FLAT:   "Flat",
@@ -31,7 +40,10 @@ TERRAIN_NAMES = {
     TERRAIN_WATER:  "Water"
 }
 
+
 # ── Severity Levels ──────────────────────────────────────────────
+# Used across entire MERLIN system — classification target later
+
 SEVERITY_LOW      = 0
 SEVERITY_MEDIUM   = 1
 SEVERITY_HIGH     = 2
@@ -44,34 +56,64 @@ SEVERITY_NAMES = {
     SEVERITY_CRITICAL: "Critical"
 }
 
+
 # ── Simulation Constants ─────────────────────────────────────────
-BASE_EMERGENCY_RATE = 0.001
-TICKS_PER_HOUR      = 60
-TICKS_PER_DAY       = 1440
-TICKS_PER_YEAR      = 525600
+# Defines time scaling and base emergency probability
+
+BASE_EMERGENCY_RATE = 0.001   # Probability per tick at density=1.0
+TICKS_PER_HOUR      = 60      # 1 tick = 1 minute
+TICKS_PER_DAY       = 1440    # 24 hours
+TICKS_PER_YEAR      = 525600  # Full simulation year
+
 
 # ── Cell Class ───────────────────────────────────────────────────
 class Cell:
+    """
+    Represents a single square in the simulation grid.
+
+    Each cell models:
+    - Population density
+    - Terrain type
+    - Weather conditions
+    - Distance to hospital
+
+    This is the fundamental unit where emergencies occur.
+    """
+
     def __init__(self, col, row, population_density=0.0,
                  terrain=TERRAIN_FLAT, has_landing_zone=True,
                  distance_to_hospital_km=50.0):
 
+        # ── Grid Position ────────────────────────────────────────
         self.col = col
         self.row = row
 
+        # ── Population ───────────────────────────────────────────
+        # Determines likelihood of emergencies
         self.population_density = population_density
+
+        # Bernoulli probability (p)
         self.emergency_probability = population_density * BASE_EMERGENCY_RATE
 
+        # ── Geography ────────────────────────────────────────────
         self.terrain = terrain
         self.has_landing_zone = has_landing_zone
         self.distance_to_hospital_km = distance_to_hospital_km
 
-        self.weather = WEATHER_CLEAR
+        # ── Weather ──────────────────────────────────────────────
+        self.weather = WEATHER_CLEAR  # Default state
 
     def check_emergency(self):
+        """
+        Performs a Bernoulli trial:
+        Returns True if an emergency occurs this tick.
+        """
         return random.random() < self.emergency_probability
 
     def can_helicopter_land(self):
+        """
+        Determines if helicopter landing is physically possible.
+        """
         if not self.has_landing_zone:
             return False
         if self.terrain == TERRAIN_WATER:
@@ -79,48 +121,76 @@ class Cell:
         return True
 
     def is_helicopter_weather_safe(self):
+        """
+        Determines if weather allows helicopter dispatch.
+        """
         return self.weather in (WEATHER_CLEAR, WEATHER_CLOUDY)
 
     def __repr__(self):
+        """
+        Debug-friendly representation of the cell.
+        """
         return (
             f"Cell({self.col},{self.row}) | "
             f"density={self.population_density:.2f} | "
             f"{WEATHER_NAMES[self.weather]} | "
             f"{TERRAIN_NAMES[self.terrain]}"
         )
-    
 
-    # ── Grid Class ───────────────────────────────────────────────────
+
+# ── Grid Class ───────────────────────────────────────────────────
 class Grid:
+    """
+    Represents the full simulation environment.
+
+    A 2D grid of Cell objects covering a rural region.
+    """
+
     def __init__(self, width=10, height=10):
+
+        # ── Dimensions ──────────────────────────────────────────
         self.width  = width
         self.height = height
 
-        # Create 2D grid of cells
+        # ── Grid Construction ───────────────────────────────────
         self.cells = [
             [Cell(col, row) for row in range(height)]
             for col in range(width)
         ]
 
-        # Hospital location (center of grid)
+        # ── Hospital Location ───────────────────────────────────
+        # Positioned at grid center
         self.hospital_col = width // 2
         self.hospital_row = height // 2
 
     def get_cell(self, col, row):
+        """
+        Safely retrieve a cell.
+        """
         if not (0 <= col < self.width and 0 <= row < self.height):
             raise IndexError(f"Cell ({col},{row}) is outside grid")
         return self.cells[col][row]
 
     def set_population(self, col, row, density):
+        """
+        Assign population density and update probability.
+        """
         cell = self.get_cell(col, row)
         cell.population_density = density
         cell.emergency_probability = density * BASE_EMERGENCY_RATE
 
     def distance_between_cells(self, col1, row1, col2, row2):
+        """
+        Euclidean distance between two cells.
+        1 grid unit = 10 km.
+        """
         grid_distance = np.sqrt((col2 - col1)**2 + (row2 - row1)**2)
-        return grid_distance * 10.0   # convert to km
+        return grid_distance * 10.0
 
     def update_hospital_distances(self):
+        """
+        Compute distance from each cell to hospital.
+        """
         for col in range(self.width):
             for row in range(self.height):
                 dist = self.distance_between_cells(
@@ -133,6 +203,9 @@ class Grid:
         return self.width * self.height
 
     def populated_cells(self):
+        """
+        Returns all cells with non-zero population.
+        """
         return [
             self.cells[col][row]
             for col in range(self.width)
@@ -146,9 +219,21 @@ class Grid:
             f"{self.total_cells()} cells | "
             f"Hospital at ({self.hospital_col},{self.hospital_row})"
         )
-    
-    # ── Map Builder ──────────────────────────────────────────────────
+
+
+# ── Map Builder ──────────────────────────────────────────────────
 def build_rural_ontario_map():
+    """
+    Constructs a realistic rural Ontario simulation map.
+
+    Includes:
+    - Town clusters
+    - Highway corridor
+    - Lakes (water)
+    - Forest regions
+    - Hilly terrain
+    """
+
     grid = Grid(width=10, height=10)
 
     # ── Towns ──────────────────────────────────────────────
@@ -160,6 +245,8 @@ def build_rural_ontario_map():
 
     for col, row, density in towns:
         grid.set_population(col, row, density)
+
+        # Surrounding lower-density outskirts
         for dc, dr in [(-1,0),(1,0),(0,-1),(0,1)]:
             nc, nr = col+dc, row+dr
             if 0 <= nc < 10 and 0 <= nr < 10:
@@ -193,13 +280,18 @@ def build_rural_ontario_map():
             cell = grid.get_cell(col, row)
             cell.terrain = TERRAIN_HILLY
 
-    # ── Final update ───────────────────────────────────────
+    # Final distance calculation
     grid.update_hospital_distances()
 
     return grid
 
+
 # ── Emergency Generation ─────────────────────────────────────────
 def generate_emergencies(grid):
+    """
+    Runs one simulation tick.
+    Returns all cells where emergencies occur.
+    """
     emergencies = []
     for col in range(grid.width):
         for row in range(grid.height):
@@ -209,23 +301,32 @@ def generate_emergencies(grid):
     return emergencies
 
 
+# ── Validation Function ──────────────────────────────────────────
 def validate_simulation(grid, num_ticks=10000):
+    """
+    Validates Bernoulli correctness statistically.
+    """
+
     print(f"\nValidating simulation over {num_ticks:,} ticks...")
     print("-" * 50)
 
     all_passed = True
 
     for cell in grid.populated_cells():
+
+        # Simulate actual outcomes
         actual = sum(
             1 for _ in range(num_ticks)
             if random.random() < cell.emergency_probability
         )
 
+        # Expected value
         expected = cell.emergency_probability * num_ticks
 
+        # Adjust tolerance for small probabilities
         if expected < 5:
             lower = 0
-            upper = expected * 3.0   # allow wider variation for small values
+            upper = expected * 3.0
         else:
             lower = expected * 0.70
             upper = expected * 1.30
