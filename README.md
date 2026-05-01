@@ -26,7 +26,30 @@ using machine learning, mathematical optimization, and safety rules.
 ---
 
 ## 📌 Status
-Active development — Phase 1 (Simulation Engine)
+Active development — Phase 1 (Simulation Engine)(DATE)
+MAY 1ST 2026
+
+It simulates:
+- Emergency generation (probabilistic modeling)
+- Patient severity assignment
+- Vehicle dispatch (helicopters vs ambulances)
+- Real-world constraints (weather, terrain, distance)
+
+## Modules
+- `core/grid.py` → geographic simulation
+- `core/emergency.py` → emergency generation + severity modeling
+- `core/assets.py` → vehicles and fleet logic
+
+## Status
+✅ Phase 1 Complete  
+- Simulation environment built  
+- Emergency modeling validated  
+- Fleet system operational  
+
+## Next Steps
+- Dispatch engine
+- Safety validator
+- AI decision model (XGBoost)
 
 ---
 
