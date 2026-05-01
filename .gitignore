@@ -1,8 +1,10 @@
-venv/
+# Python
 __pycache__/
 *.pyc
-*.pyo
-.env
-data/synthetic/*.csv
-*.ipynb_checkpoints
-.vscode/settings.json
+
+# Virtual environment
+venv/
+
+# OS files
+.DS_Store
+Thumbs.db
