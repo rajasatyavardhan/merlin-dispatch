@@ -402,22 +402,30 @@ def run_simulation(system_name, num_ticks=SIM_TICKS_SHORT,
 
             else:
                 raise ValueError(f"Unknown system: {system_name}")
-
-            # Record result
+            # Record result — now saves ALL features
             results.append({
-                'tick':          tick,
-                'system':        system_name,
-                'severity':      emergency.severity,
-                'emergency_type': emergency.emergency_type,
-                'patient_age':   emergency.patient_age,
-                'decision':      decision,
-                'distance_km':   dist,
-                'response_time': resp,
-                'cost':          cost,
-                'col':           cell.col,
-                'row':           cell.row,
-            })
-
+                'tick':                 tick,
+                'system':               system_name,
+                'severity':             emergency.severity,
+                'emergency_type':       emergency.emergency_type,
+                'patient_age':          emergency.patient_age,
+                'decision':             decision,
+                'distance_km':          dist,
+                'response_time':        resp,
+                'cost':                 cost,
+                'col':                  cell.col,
+                'row':                  cell.row,
+                
+                # ── All ML features now saved ──────────────────────
+                'population_density':   cell.population_density,
+                'weather':              cell.weather,
+                'terrain':              cell.terrain,
+                'has_landing_zone':     int(cell.has_landing_zone),
+                'distance_to_hospital': cell.distance_to_hospital_km,
+                'distance_to_vehicle':  dist,
+                'season':               (tick // 131400) % 4,
+                'hour_of_day':          (tick % 1440) // 60,
+                })
     metrics = calculate_metrics(results)
 
     if verbose:

@@ -69,14 +69,13 @@ INPUT_FEATURES = [
 # your paper can include a hyperparameter
 # tuning section using GridSearchCV
 XGBOOST_PARAMS = {
-    'n_estimators':     200,   # number of trees
-    'max_depth':        6,     # max depth per tree
+    'n_estimators':     100,   # number of trees
+    'max_depth':        3,     # max depth per tree
     'learning_rate':    0.1,   # how fast model learns
     'subsample':        0.8,   # fraction of data per tree
     'colsample_bytree': 0.8,   # fraction of features per tree
     'random_state':     42,    # reproducibility
     'eval_metric':      'mlogloss',
-    'use_label_encoder': False,
 }
 
 # ── Data Loading ─────────────────────────────────────────────────
