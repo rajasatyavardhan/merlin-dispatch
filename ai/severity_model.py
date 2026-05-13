@@ -304,14 +304,15 @@ def train_severity_model(X, y, test_size=0.2,
 
         # Confusion matrix
         cm = confusion_matrix(y_test, y_test_pred)
+
         print("Confusion Matrix:")
         print("(rows=actual, cols=predicted)")
-        header = f"{'':>10}" + "".join(
-            f"{SEVERITY_NAMES[i]:>10}" for i in range(4)
-        )
+        class_names = [THREE_CLASS_NAMES[i] for i in range(3)]
+        header = f"{'':>10}" + "".join(f"{name:>10}" for name in class_names)
+        
         print(header)
         for i, row in enumerate(cm):
-            row_str = f"{SEVERITY_NAMES[i]:>10}"
+            row_str = f"{class_names[i]:>10}"
             for val in row:
                 row_str += f"{val:>10}"
             print(row_str)
@@ -432,7 +433,7 @@ def predict_severity(model, features_dict):
     # Predict probabilities for each class
     probabilities = model.predict_proba(feature_vector)[0]
     confidence = {
-        SEVERITY_NAMES[i]: round(float(p), 4)
+        THREE_CLASS_NAMES[i]: round(float(p), 4)
         for i, p in enumerate(probabilities)
     }
 
@@ -502,7 +503,7 @@ def run_training_pipeline(csv_path=RESULTS_CSV_PATH,
     severity, confidence = predict_severity(model, test_features)
 
     print("Input: Cardiac arrest, age 72, winter, 45km from hospital")
-    print(f"Predicted severity: {SEVERITY_NAMES[severity]}")
+    print(f"Predicted severity: {THREE_CLASS_NAMES[severity]}")
     print("Confidence scores:")
     for name, prob in confidence.items():
         bar = "█" * int(prob * 30)
