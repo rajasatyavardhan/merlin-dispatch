@@ -234,56 +234,83 @@ def build_rural_ontario_map():
     - Hilly terrain
     """
 
+    """ (UPDATED ,MAY 13,2026)
+    Builds a realistic 10×10 grid representing rural Ontario.
+    
+    Updated version:
+    - More terrain variety across cells
+    - Landing zones derived from terrain
+    - Weather starts seasonal not always clear
+    """
     grid = Grid(width=10, height=10)
 
-    # ── Towns ──────────────────────────────────────────────
+    # ── Towns ────────────────────────────────────────────────────
     towns = [
         (2, 2, 0.75),
         (7, 3, 0.65),
         (4, 7, 0.80),
     ]
-
     for col, row, density in towns:
         grid.set_population(col, row, density)
-
-        # Surrounding lower-density outskirts
         for dc, dr in [(-1,0),(1,0),(0,-1),(0,1)]:
             nc, nr = col+dc, row+dr
             if 0 <= nc < 10 and 0 <= nr < 10:
                 grid.set_population(nc, nr, density * 0.3)
 
-    # ── Highway ────────────────────────────────────────────
+    # ── Highway ──────────────────────────────────────────────────
     for col in range(10):
         cell = grid.get_cell(col, 5)
-        cell.population_density = 0.15
+        cell.population_density    = 0.15
         cell.emergency_probability = 0.15 * BASE_EMERGENCY_RATE * 2.0
 
-    # ── Lakes ──────────────────────────────────────────────
-    water_cells = [(6, 6), (6, 7), (7, 6), (7, 7)]
+    # ── Lakes (Water) ────────────────────────────────────────────
+    water_cells = [(6,6),(6,7),(7,6),(7,7)]
     for col, row in water_cells:
         cell = grid.get_cell(col, row)
-        cell.terrain = TERRAIN_WATER
-        cell.has_landing_zone = False
-        cell.population_density = 0.0
+        cell.terrain             = TERRAIN_WATER
+        cell.has_landing_zone    = False
+        cell.population_density  = 0.0
         cell.emergency_probability = 0.0
 
-    # ── Forest ─────────────────────────────────────────────
-    forest_cells = [(0,7),(0,8),(1,8),(0,9),(1,9)]
+    # ── Dense Forest ─────────────────────────────────────────────
+    forest_cells = [(0,7),(0,8),(1,8),(0,9),(1,9),
+                    (2,8),(2,9),(3,9)]
     for col, row in forest_cells:
         cell = grid.get_cell(col, row)
         cell.terrain = TERRAIN_FOREST
-        cell.has_landing_zone = False
+        # Forest = no landing zone 80% of the time
+        cell.has_landing_zone = random.random() > 0.80
 
-    # ── Hilly region ───────────────────────────────────────
-    for col in range(8, 10):
-        for row in range(0, 3):
-            cell = grid.get_cell(col, row)
-            cell.terrain = TERRAIN_HILLY
+    # ── Hilly terrain ────────────────────────────────────────────
+    hilly_cells = [(8,0),(9,0),(8,1),(9,1),(8,2),(9,2),
+                   (0,1),(0,2),(1,0),(1,1)]
+    for col, row in hilly_cells:
+        cell = grid.get_cell(col, row)
+        cell.terrain = TERRAIN_HILLY
+        # Hilly = no landing zone 50% of the time
+        cell.has_landing_zone = random.random() > 0.50
 
-    # Final distance calculation
+    # ── Remaining cells — flat with full landing zone ────────────
+    # Already default — no change needed
+
+    # ── First Nations remote community ───────────────────────────
+    # Water-access only — no road, no landing zone nearby
+    # Represents fly-in communities in northern Ontario
+    # 31 of 49 NAN communities have no paramedic services
+    remote_cells = [(0,0),(1,0),(0,1)]
+    for col, row in remote_cells:
+        cell = grid.get_cell(col, row)
+        if cell.terrain != TERRAIN_HILLY:
+            cell.terrain          = TERRAIN_FOREST
+        cell.has_landing_zone     = False
+        cell.population_density   = 0.3
+        cell.emergency_probability = 0.3 * BASE_EMERGENCY_RATE * 1.5
+
+    # ── Update hospital distances ─────────────────────────────────
     grid.update_hospital_distances()
 
     return grid
+
 
 
 # ── Emergency Generation ─────────────────────────────────────────

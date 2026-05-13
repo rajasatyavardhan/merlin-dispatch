@@ -132,12 +132,37 @@ def assign_severity(emergency_type, patient_age, cell, season):
 
     weights = list(base_weights[emergency_type])
 
+    # ── Hard clinical rules (new) ────────────────────────────────
+    # Cardiac arrest is NEVER Low or Medium — clinical fact
+    if emergency_type == EMERGENCY_CARDIAC:
+        weights[0] = 0.0
+        weights[1] = 0.0
+
+    # Minor injury in young adult — never Critical
+    if emergency_type == EMERGENCY_MINOR and patient_age < 50:
+        weights[3] = 0.0
+
+    # Water terrain — no road access — minimum High
+    if cell.terrain == TERRAIN_WATER:
+        weights[0] = 0.0
+        weights[1] = 0.0
+
+    # ── Age modifier (strengthened) ──────────────────────────────
+    if patient_age >= 65:
+        weights[0] *= 0.2
+        weights[1] *= 0.4
+        weights[2] *= 1.5
+        weights[3] *= 3.0
+    elif patient_age < 18:
+        weights[2] *= 1.2
+        weights[3] *= 1.4
+
     # ── Age effect ──────────────────────────────────────────────
     if patient_age >= 65:
-        weights[0] *= 0.5
-        weights[1] *= 0.7
-        weights[2] *= 1.3
-        weights[3] *= 1.8
+        weights[0] *= 0.2    # was 0.5 — much less likely Low
+        weights[1] *= 0.4    # was 0.7 — much less likely Medium
+        weights[2] *= 1.5    # was 1.3 — more likely High
+        weights[3] *= 3.0    # was 1.8 — much more likely Critical
 
     elif patient_age < 18:
         weights[2] *= 1.2

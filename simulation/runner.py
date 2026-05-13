@@ -31,6 +31,9 @@ import pandas as pd
 from collections import defaultdict
 
 from core.grid import (
+    TERRAIN_WATER,
+    WEATHER_CLEAR,
+    WEATHER_CLOUDY,
     build_rural_ontario_map,
     generate_emergencies,
     SEVERITY_HIGH, SEVERITY_CRITICAL,
@@ -65,6 +68,52 @@ SURVIVAL_BASE = {
     3: 0.40,   # Critical — lower baseline without fast response
 }
 SURVIVAL_DECAY_PER_MINUTE = 0.008  # 0.8% per minute
+
+
+def update_weather(grid, tick):
+    """
+    Updates weather across all grid cells.
+    Called every 1440 ticks (once per simulated day).
+
+    Seasonal storm probability:
+      Spring: 10%  Summer: 5%
+      Autumn: 15%  Winter: 35%
+
+    Based on Environment Canada northern Ontario
+    weather pattern data.
+
+    This creates real weather variation in the dataset
+    so the ML model can learn weather's effect on
+    emergency severity and dispatch outcomes.
+    """
+    season = (tick // 131400) % 4
+
+    storm_probability = {
+        0: 0.10,   # Spring
+        1: 0.05,   # Summer
+        2: 0.15,   # Autumn
+        3: 0.35,   # Winter
+    }[season]
+
+    for col in range(grid.width):
+        for row in range(grid.height):
+            cell = grid.get_cell(col, row)
+
+            # Water cells always have worse weather
+            # (open water = more exposed conditions)
+            local_prob = storm_probability
+            if cell.terrain == TERRAIN_WATER:
+                local_prob = min(1.0, storm_probability * 1.3)
+
+            r = random.random()
+            if r < local_prob * 0.3:
+                cell.weather = WEATHER_BLIZZARD
+            elif r < local_prob:
+                cell.weather = WEATHER_STORM
+            elif r < local_prob + 0.25:
+                cell.weather = WEATHER_CLOUDY
+            else:
+                cell.weather = WEATHER_CLEAR
 
 # ── Baseline Dispatchers ─────────────────────────────────────────
 
@@ -364,6 +413,10 @@ def run_simulation(system_name, num_ticks=SIM_TICKS_SHORT,
         print(f"Running {system_name} — {num_ticks:,} ticks...")
 
     for tick in range(num_ticks):
+        # Update weather daily
+        if tick % 1440 == 0:
+            update_weather(grid, tick)
+            
         # Generate emergencies this tick
         triggered_cells = generate_emergencies(grid)
 

@@ -11,11 +11,13 @@
 # In our simulation, it trains on synthetic data generated
 # by the simulation runner.
 
+from tabnanny import verbose
+
 import numpy as np
 import pandas as pd
 import pickle
 import os
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.metrics import (
     classification_report,
     confusion_matrix,
@@ -154,6 +156,21 @@ def load_training_data(csv_path=RESULTS_CSV_PATH):
 
     return X, y, merlin_df
 
+def collapse_to_three_classes(y):
+    """
+    Collapses Medium(1) and High(2) into Urgent(1).
+    Maps: Low=0, Urgent=1, Critical=2
+    
+    More clinically meaningful for dispatch decisions:
+    Low → standard response
+    Urgent → fast ground ambulance
+    Critical → helicopter consideration
+    """
+    mapping = {0: 0, 1: 1, 2: 1, 3: 2}
+    return np.array([mapping[label] for label in y])
+
+THREE_CLASS_NAMES = {0: "Low", 1: "Urgent", 2: "Critical"}
+
 
 def analyse_class_balance(y):
     """
@@ -171,7 +188,7 @@ def analyse_class_balance(y):
     for cls, count in zip(unique, counts):
         pct = count / total * 100
         bar = "█" * int(pct / 2)
-        print(f"  {SEVERITY_NAMES[cls]:<10} {count:>4} "
+        print(f"  {THREE_CLASS_NAMES.get(cls, str(cls)):<10} {count:>4} "
               f"({pct:>5.1f}%) {bar}")
 
     min_pct = min(counts) / total * 100
@@ -214,14 +231,25 @@ def train_severity_model(X, y, test_size=0.2,
         stratify     = y   # ensures equal severity distribution
                            # in both train and test sets
     )
-
+    from sklearn.model_selection import cross_val_score
+    cv_scores = cross_val_score(
+        xgb.XGBClassifier(**XGBOOST_PARAMS),X, y, cv=5,scoring='f1_weighted')
+    
     if verbose:
-        print("Training XGBoost Severity Classifier")
-        print("-" * 45)
-        print(f"Training samples: {len(X_train)}")
-        print(f"Test samples:     {len(X_test)}")
-        print()
-
+        print(f"5-Fold Cross-Validation F1:")
+        for i, score in enumerate(cv_scores):
+            print(f"  Fold {i+1}: {score:.4f}")
+            print(f"  Mean:   {cv_scores.mean():.4f} "
+                  f"(±{cv_scores.std():.4f})")
+            print()
+            
+            if verbose:
+                print("Training XGBoost Severity Classifier")
+                print("-" * 45)
+                print(f"Training samples: {len(X_train)}")
+                print(f"Test samples:     {len(X_test)}")
+                print()
+    
     # ── Train Model ──────────────────────────────────────────────
     model = xgb.XGBClassifier(**XGBOOST_PARAMS)
     model.fit(
@@ -267,7 +295,7 @@ def train_severity_model(X, y, test_size=0.2,
         # Per-class report
         print("Per-Class Performance:")
         print("-" * 45)
-        target_names = [SEVERITY_NAMES[i] for i in range(4)]
+        target_names = [THREE_CLASS_NAMES.get(i, str(i)) for i in range(3)]
         print(classification_report(
             y_test, y_test_pred,
             target_names=target_names,
@@ -433,6 +461,11 @@ def run_training_pipeline(csv_path=RESULTS_CSV_PATH,
 
     # Step 1: Load data
     X, y, df = load_training_data(csv_path)
+    
+    # Use 3-class labels (Low, Urgent, Critical) instead of 4-class
+    y = collapse_to_three_classes(y)
+    print("Using 3-class labels: Low / Urgent / Critical")
+
 
     # Step 2: Class balance
     analyse_class_balance(y)
