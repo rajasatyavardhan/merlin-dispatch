@@ -161,7 +161,7 @@ def baseline_random(emergency, fleet, grid):
         vehicle.base_col, vehicle.base_row,
         emergency.cell.col, emergency.cell.row
     )
-    resp = vehicle.travel_time_ticks(dist)
+    resp = vehicle.travel_time_ticks(dist,  weather = emergency.cell.weather,terrain = emergency.cell.terrain)
 
     vehicle.dispatch(emergency, emergency.call_tick, dist)
     vehicle.complete_dispatch(emergency.call_tick + resp)

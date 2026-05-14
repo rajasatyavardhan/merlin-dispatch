@@ -54,7 +54,11 @@ def calculate_dispatch_score(vehicle, emergency, grid):
     )
 
     # Response time in minutes including spinup
-    response_time = vehicle.travel_time_ticks(distance_km)
+    response_time = vehicle.travel_time_ticks(
+        distance_km,
+        weather=emergency.cell.weather,
+        terrain=emergency.cell.terrain
+    )
 
     # Severity multiplier — time matters more for critical cases
     severity_multiplier = {

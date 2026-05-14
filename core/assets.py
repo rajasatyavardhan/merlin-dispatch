@@ -5,7 +5,7 @@
 import numpy as np
 from enum import Enum
 from core.grid import (
-    TERRAIN_WATER, TERRAIN_FOREST,
+    TERRAIN_HILLY, TERRAIN_WATER, TERRAIN_FOREST,
     WEATHER_CLEAR, WEATHER_CLOUDY,
     WEATHER_STORM, WEATHER_BLIZZARD
 )
@@ -96,8 +96,10 @@ class Vehicle:
     def is_available(self):
         """Returns True if vehicle can be dispatched right now."""
         return self.status == VehicleStatus.AVAILABLE
+    
 
-    def travel_time_ticks(self, distance_km):
+    
+    def travel_time_ticks(self, distance_km,weather=None, terrain=None):
         """
         Calculates travel time in ticks (minutes) for a given
         distance in kilometres.
@@ -109,8 +111,58 @@ class Vehicle:
           Helicopter: 80km / 250km/h × 60 = 19.2 min + 10 spinup = 29 ticks
           Ambulance:  80km / 80km/h  × 60 = 60.0 min + 2  spinup = 62 ticks
         """
-        travel_minutes = (distance_km / self.speed_kmh) * 60
-        return int(travel_minutes) + self.spinup_ticks
+        
+        """
+        UPDATED: MAY 13TH,2026 — Now includes weather and terrain modifiers for more realism.
+        Calculates travel time in ticks (minutes) for a given
+        distance in kilometres, adjusting for weather and terrain.
+        
+        Weather and terrain can significantly affect travel times,
+        especially for ground ambulances on rural roads.
+        
+        Formula: time = distance / effective_speed × 60 (convert hours to minutes)
+        Plus spinup time before departure.
+        
+        Effective speed is modified by:
+        - Weather: storm and blizzard slow down ambulances; helicopters grounded
+        - Terrain: hilly and forested areas slow down ambulances; water is impassable
+        """
+        from core.grid import (
+            WEATHER_STORM, WEATHER_BLIZZARD, WEATHER_CLOUDY,
+            TERRAIN_HILLY, TERRAIN_FOREST, TERRAIN_WATER
+        )
+        
+        effective_speed = self.speed_kmh # type: ignore
+
+    # ── Weather speed modifiers ──────────────────────────────
+        if weather is not None: # type: ignore
+            if self.vehicle_type.value == "ambulance": # type: ignore
+            # Ground vehicles affected by weather
+                if weather == WEATHER_BLIZZARD: # type: ignore
+                    effective_speed *= 0.45  # 45% speed in blizzard
+                elif weather == WEATHER_STORM: # type: ignore
+                    effective_speed *= 0.65  # 65% speed in storm
+                elif weather == WEATHER_CLOUDY: # type: ignore
+                    effective_speed *= 0.90  # minor effect
+            else:
+            # Helicopter slightly slower in cloudy conditions
+                if weather == WEATHER_CLOUDY: # type: ignore
+                    effective_speed *= 0.92
+
+    # ── Terrain speed modifiers (ambulance only) ─────────────
+        if terrain is not None: # type: ignore
+            if self.vehicle_type.value == "ambulance": # type: ignore
+                if terrain == TERRAIN_HILLY: # type: ignore
+                    effective_speed *= 0.70  # type: ignore # hilly roads slower
+                elif terrain == TERRAIN_FOREST: # type: ignore
+                    effective_speed *= 0.55  # type: ignore # forest tracks slow
+            # WATER handled by is_dispatchable — never reaches here
+
+    # ── Calculate time ────────────────────────────────────────
+        effective_speed = max(10.0, effective_speed)
+        travel_minutes  = (distance_km / effective_speed) * 60 # type: ignore
+        return int(travel_minutes) + self.spinup_ticks # type: ignore
+    
 
     def dispatch(self, emergency, current_tick, distance_km):
         """
@@ -120,7 +172,9 @@ class Vehicle:
         self.status            = VehicleStatus.DISPATCHED
         self.current_emergency = emergency
         self.dispatch_tick     = current_tick
-        self.estimated_arrival = current_tick + self.travel_time_ticks(distance_km)
+        self.estimated_arrival = current_tick + self.travel_time_ticks( distance_km,
+                                                                       weather = emergency.cell.weather if emergency else None,
+                                                                       terrain = emergency.cell.terrain if emergency else None)
 
         # Update statistics
         self.total_dispatches += 1
